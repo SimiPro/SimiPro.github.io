@@ -2,6 +2,8 @@ import * as THREE from '../../build/three.module.js';
 import { OrbitControls } from '../../build/OrbitControls.js';
 import { TransformControls } from '../../build/TransformControls.js';
 import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
+import * as M from './math_helper.js'
+
 (function() {
     let container;
     let camera, scene, renderer;
@@ -137,12 +139,17 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
         scene.add(line);
 
 
-        const sgeometry = new THREE.SphereGeometry( 5, 32, 32 );
+        const sgeometry = new THREE.SphereGeometry( 7, 32, 32 );
         const smaterial = new THREE.MeshBasicMaterial( {color: 0xff0000} );
         const sphere = new THREE.Mesh( sgeometry, smaterial );
         projected_point = sphere;
         scene.add( sphere );
 
+    }
+
+    function setNewProjectedPoint(position) {
+        projected_point.position.set(position.x, position.y, position.z);
+       // projected_point.geometry.attributes.position.needsUpdate = true;
     }
 
     function addSplineObject( position ) {
@@ -167,6 +174,34 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
 
     }
 
+    function clamp01(t) {
+        if (t > 1)
+            return 1
+        if (t < 0)
+            return 0;
+        return t;
+    }
+
+
+    function projectToSegment(p, a, b) {
+        let ab = M.sub(b, a);
+        let t = 1;
+        if (M.dot(ab, ab) >= 1e-5) {
+            t = M.dot(M.sub(p, a), ab);
+            t = t / M.dot(ab, ab);
+            t = clamp01(t);
+        }
+        return M.add(a, M.smul(t, ab));
+    }
+
+    function updateProjectedPoint() {
+        const p1 = positions[0];
+        const p2 = positions[1];
+        const p3 = positions[2];
+        const projectedPoint = projectToSegment(p3, p1, p2);
+        setNewProjectedPoint(projectedPoint)
+
+    }
 
     function updateSplineOutline() {
         for (let i = 0; i < lines.length; i++ ) {
@@ -175,6 +210,7 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
             lines[i].geometry.attributes.position.setXYZ(1, positions[1].x, positions[1].y, positions[1].z);
             lines[i].geometry.attributes.position.needsUpdate = true;
         }
+        updateProjectedPoint();
     }
 
 

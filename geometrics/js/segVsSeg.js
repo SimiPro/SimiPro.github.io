@@ -2,39 +2,61 @@ import * as THREE from '../../build/three.module.js';
 import { OrbitControls } from '../../build/OrbitControls.js';
 import { TransformControls } from '../../build/TransformControls.js';
 import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
+import * as M from './math_helper.js'
+
 (function() {
     let container;
     let camera, scene, renderer;
     let height, width;
-    const splineHelperObjects = [];
-    let splinePointsLength = 2;
+    const helperObjects = [];
+    let num_points = 4;
     const positions = [];
     const point = new THREE.Vector3();
     const lines = [];
+    let plane;
+    let projected_point;
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const onUpPosition = new THREE.Vector2();
     const onDownPosition = new THREE.Vector2();
 
-    const geometry = new THREE.BoxGeometry( 20, 20, 20 );
+    const geometry = new THREE.BoxGeometry( 10, 10, 10 );
     let transformControl;
 
-    const ARC_SEGMENTS = 200;
-
-    const splines = {};
-
-    const params = {
-        uniform: true,
-        tension: 0.5,
-        centripetal: true,
-        chordal: true,
-        addPoint: addPoint,
-        exportSpline: exportSpline
-    };
 
     init();
     animate();
+
+    function addLine(p1, p2) {
+
+        const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
+        let line_ps = [p1, p2]
+        const geometry = new THREE.BufferGeometry().setFromPoints(line_ps);
+
+        let line = new THREE.Line(geometry, material );
+        line.castShadow = true;
+        line.receiveShadow = true;
+        lines.push(line);
+        scene.add(line);
+    }
+
+    function addPlane(p1, p2) {
+        const geometry = new THREE.PlaneGeometry( 500, 500     );
+        const material = new THREE.MeshBasicMaterial( {color: 0xffff00, side: THREE.DoubleSide} );
+
+        plane = new THREE.Mesh( geometry, material );
+        plane.position.set(p1.x,p1.y,p1.z);
+        // plane.position.set(p1);
+       // plane.rotation.set
+        scene.add( plane );
+    }
+
+
+
+    function updatePlanePosition(p1, p2) {
+        plane.position.set(p1.x,p1.y,p1.z);
+    }
 
     function init() {
 
@@ -83,23 +105,6 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
 
 
 
-        /*
-                const gui = new GUI();
-
-                gui.add( params, 'uniform' );
-                gui.add( params, 'tension', 0, 1 ).step( 0.01 ).onChange( function ( value ) {
-
-                    splines.uniform.tension = value;
-                    updateSplineOutline();
-
-                } );
-                gui.add( params, 'centripetal' );
-                gui.add( params, 'chordal' );
-                gui.add( params, 'addPoint' );
-                gui.add( params, 'removePoint' );
-                gui.add( params, 'exportSpline' );
-                gui.open();*/
-
         // Controls
         const controls = new OrbitControls( camera, renderer.domElement );
         controls.damping = 0.2;
@@ -115,9 +120,7 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
         scene.add( transformControl );
 
         transformControl.addEventListener( 'objectChange', function () {
-
             updateSplineOutline();
-
         } );
 
         container.addEventListener( 'pointerdown', onPointerDown );
@@ -125,46 +128,36 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
         container.addEventListener( 'pointermove', onPointerMove );
 
 
-        /*******
-         * Curves
-         *********/
-
-        for ( let i = 0; i < splinePointsLength; i ++ ) {
-
-            addSplineObject( positions[ i ] );
-
+        for ( let i = 0; i < num_points; i ++ ) {
+            addControlPoints( positions[ i ] );
         }
 
         positions.length = 0;
 
-        for ( let i = 0; i < splinePointsLength; i ++ ) {
-
-            positions.push( splineHelperObjects[ i ].position );
-
+        for ( let i = 0; i < num_points; i ++ ) {
+            positions.push( helperObjects[ i ].position );
         }
-        console.log(positions)
-        const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
-        const geometry = new THREE.BufferGeometry().setFromPoints(positions);
-        //geometry.setAttribute( 'position', new THREE.BufferAttribute( new Float32Array( ARC_SEGMENTS * 2 ), 2 ) );
-        let line = new THREE.Line(geometry, material );
-        line.castShadow = true;
-        line.receiveShadow = true;
-        lines.push(line);
-        //  line.mesh.castShadow = true;
+
+        addLine(positions[0], positions[1]);
+        addLine(positions[2], positions[3])
+
+        addPlane(positions[0], positions[1]);
 
 
-        scene.add(line);
-        /*
-                load( [ new THREE.Vector3( 289.76843686945404, 452.51481137238443, 56.10018915737797 ),
-                    new THREE.Vector3( - 53.56300074753207, 171.49711742836848, - 14.495472686253045 ),
-                    new THREE.Vector3( - 91.40118730204415, 176.4306956436485, - 6.958271935582161 ),
-                    new THREE.Vector3( - 383.785318791128, 491.1365363371675, 47.869296953772746 ) ] );
-                    */
-
+        const sgeometry = new THREE.SphereGeometry( 7, 32, 32 );
+        const smaterial = new THREE.MeshBasicMaterial( {color: 0xff0000} );
+        const sphere = new THREE.Mesh( sgeometry, smaterial );
+        projected_point = sphere;
+        scene.add( sphere );
 
     }
 
-    function addSplineObject( position ) {
+    function setNewProjectedPoint(position) {
+        projected_point.position.set(position.x, position.y, position.z);
+        // projected_point.geometry.attributes.position.needsUpdate = true;
+    }
+
+    function addControlPoints( position ) {
 
         const material = new THREE.MeshLambertMaterial( { color: Math.random() * 0xffffff } );
         //const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
@@ -181,65 +174,53 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
         object.castShadow = true;
         object.receiveShadow = true;
         scene.add( object );
-        splineHelperObjects.push( object );
+        helperObjects.push( object );
         return object;
 
     }
 
-    function addPoint() {
+    function clamp01(t) {
+        if (t > 1)
+            return 1
+        if (t < 0)
+            return 0;
+        return t;
+    }
 
-        splinePointsLength ++;
 
-        positions.push( addSplineObject().position );
+    function projectToSegment(p, a, b) {
+        let ab = M.sub(b, a);
+        let t = 1;
+        if (M.dot(ab, ab) >= 1e-5) {
+            t = M.dot(M.sub(p, a), ab);
+            t = t / M.dot(ab, ab);
+            t = clamp01(t);
+        }
+        return M.add(a, M.smul(t, ab));
+    }
 
-        updateSplineOutline();
+    function updateProjectedPoint() {
+        const p1 = positions[0];
+        const p2 = positions[1];
+        const p3 = positions[2];
+        const projectedPoint = projectToSegment(p3, p1, p2);
+        setNewProjectedPoint(projectedPoint)
 
     }
 
     function updateSplineOutline() {
         for (let i = 0; i < lines.length; i++ ) {
             //position.setXYZ( i, point.x, point.y, point.z );
-            lines[i].geometry.attributes.position.setXYZ(0, positions[0].x, positions[0].y, positions[0].z);
-            lines[i].geometry.attributes.position.setXYZ(1, positions[1].x, positions[1].y, positions[1].z);
+            const id1 = 2*i;
+            const id2 = 2*i + 1;
+            lines[i].geometry.attributes.position.setXYZ(0, positions[id1].x, positions[id1].y, positions[id1].z);
+            lines[i].geometry.attributes.position.setXYZ(1, positions[id2].x, positions[id2].y, positions[id2].z);
             lines[i].geometry.attributes.position.needsUpdate = true;
         }
+        updateProjectedPoint();
+        updatePlanePosition(positions[0], positions[1]);
     }
 
-    function exportSpline() {
-
-        const strplace = [];
-
-        for ( let i = 0; i < splinePointsLength; i ++ ) {
-
-            const p = splineHelperObjects[ i ].position;
-            strplace.push( `new THREE.Vector3(${p.x}, ${p.y}, ${p.z})` );
-
-        }
-
-        console.log( strplace.join( ',\n' ) );
-        const code = '[' + ( strplace.join( ',\n\t' ) ) + ']';
-        prompt( 'copy and paste code', code );
-
-    }
-
-    function load( new_positions ) {
-
-        while ( new_positions.length > positions.length ) {
-
-            addPoint();
-
-        }
-
-
-        for ( let i = 0; i < positions.length; i ++ ) {
-
-            positions[ i ].copy( new_positions[ i ] );
-
-        }
-
-        updateSplineOutline();
-
-    }
 
     function animate() {
 
@@ -281,10 +262,9 @@ import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
 
         raycaster.setFromCamera( pointer, camera );
 
-        const intersects = raycaster.intersectObjects( splineHelperObjects );
+        const intersects = raycaster.intersectObjects( helperObjects );
 
         if ( intersects.length > 0 ) {
-            console.log("intersecting!!");
             const object = intersects[ 0 ].object;
 
             if ( object !== transformControl.object ) {

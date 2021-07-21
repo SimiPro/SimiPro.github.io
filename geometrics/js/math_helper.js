@@ -32,17 +32,12 @@ export function rotateAlignNaive(u1_, u2_) {
     u1.normalize();
     u2.normalize();
 
-    let axis = u1;
+    let axis = u1.clone();
     axis.cross(u2);
     axis.normalize();
 
+    console.log("u1:", u1, " u2: ", u2, " axis:", axis);
+    console.log("u1.axis: ", u1.dot(axis), " u2.axis: ", u2.dot(axis));
     let angleRad = Math.acos(u1.dot(u2));
-
-}
-
-Eigen::Matrix3d KS_MechanicalComponent::rotateAlignNaive(const V3D &u1, const V3D &u2)
-{
-    double angleRad = std::acos(u1.normalized().dot(u2.normalized()));
-    Eigen::AngleAxisd R(angleRad, axis);
-    return R.matrix();
+    return [axis, angleRad]
 }

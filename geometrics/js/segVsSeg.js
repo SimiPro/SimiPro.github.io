@@ -15,6 +15,8 @@ import * as M from './math_helper.js'
     const lines = [];
     let plane;
     let projected_point;
+    let pSeg34;
+    let pSeg12;
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -23,27 +25,32 @@ import * as M from './math_helper.js'
 
     const geometry = new THREE.BoxGeometry( 10, 10, 10 );
     let transformControl;
-
-
+    let proj3, proj4;
+    let projectedLine;
+    let shortest_distance_line;
     init();
     animate();
 
-    function addLine(p1, p2) {
+    function addLine(p1, p2, addToLines, color) {
 
-        const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
+        const material = new THREE.LineBasicMaterial( { color: color } );
         let line_ps = [p1, p2]
         const geometry = new THREE.BufferGeometry().setFromPoints(line_ps);
 
         let line = new THREE.Line(geometry, material );
         line.castShadow = true;
         line.receiveShadow = true;
-        lines.push(line);
+        if (addToLines) {
+            lines.push(line);
+        }
+
         scene.add(line);
+        return line;
     }
 
     function addPlane(p1, p2) {
         const geometry = new THREE.PlaneGeometry( 500, 500     );
-        const material = new THREE.MeshBasicMaterial( {color: 0xffff00, side: THREE.DoubleSide} );
+        const material = new THREE.MeshBasicMaterial( {color: 0xccaca9, side: THREE.DoubleSide} );
 
         plane = new THREE.Mesh( geometry, material );
         plane.position.set(p1.x,p1.y,p1.z);
@@ -56,6 +63,7 @@ import * as M from './math_helper.js'
 
     function updatePlanePosition(p1, p2) {
         plane.position.set(p1.x,p1.y,p1.z);
+        plane.lookAt(p2);
     }
 
     function init() {
@@ -113,23 +121,21 @@ import * as M from './math_helper.js'
         transformControl = new TransformControls( camera, renderer.domElement );
         transformControl.addEventListener( 'change', render );
         transformControl.addEventListener( 'dragging-changed', function ( event ) {
-
             controls.enabled = ! event.value;
-
-        } );
+        });
         scene.add( transformControl );
 
         transformControl.addEventListener( 'objectChange', function () {
             updateSplineOutline();
-        } );
+        });
 
         container.addEventListener( 'pointerdown', onPointerDown );
         container.addEventListener( 'pointerup', onPointerUp );
         container.addEventListener( 'pointermove', onPointerMove );
 
-
+        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff];
         for ( let i = 0; i < num_points; i ++ ) {
-            addControlPoints( positions[ i ] );
+            addControlPoints( positions[ i ], colors[i] );
         }
 
         positions.length = 0;
@@ -138,8 +144,8 @@ import * as M from './math_helper.js'
             positions.push( helperObjects[ i ].position );
         }
 
-        addLine(positions[0], positions[1]);
-        addLine(positions[2], positions[3])
+        addLine(positions[0], positions[1], true, 0x0000ff);
+        addLine(positions[2], positions[3], true, 0x0000ff)
 
         addPlane(positions[0], positions[1]);
 
@@ -150,6 +156,33 @@ import * as M from './math_helper.js'
         projected_point = sphere;
         scene.add( sphere );
 
+        proj3 = addSphere(colors[2]);
+        proj4 = addSphere(colors[3]);
+
+        pSeg12 = addSphere(0xffffff);
+        pSeg34 = addSphere(0xffffff);
+
+        shortest_distance_line = addLine(pSeg12.position, pSeg34.position, false, 0x000000);
+        projectedLine = addLine(proj3.position, proj4.position, false, 0x0000ff);
+
+        updateSplineOutline();
+
+    }
+
+    function addSphere(color) {
+        const sgeometry = new THREE.SphereGeometry( 7, 32, 32 );
+        const smaterial = new THREE.MeshBasicMaterial( {color: color} );
+        const sphere = new THREE.Mesh( sgeometry, smaterial );
+        scene.add(sphere);
+        return sphere;
+    }
+
+    function projectToPlane(nPlane_, pPlane, p) {
+        let nPlane = nPlane_.clone();
+        nPlane.normalize();
+        let v = M.sub(p, pPlane);
+        let dist = M.dot(v, nPlane);
+        return M.sub(p, M.smul(dist, nPlane));
     }
 
     function setNewProjectedPoint(position) {
@@ -157,9 +190,9 @@ import * as M from './math_helper.js'
         // projected_point.geometry.attributes.position.needsUpdate = true;
     }
 
-    function addControlPoints( position ) {
+    function addControlPoints( position, color ) {
 
-        const material = new THREE.MeshLambertMaterial( { color: Math.random() * 0xffffff } );
+        const material = new THREE.MeshLambertMaterial( { color: color } );
         //const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
         const object = new THREE.Mesh( geometry, material );
 
@@ -208,17 +241,64 @@ import * as M from './math_helper.js'
 
     }
 
+    function updateLine(line, pos1, pos2) {
+        line.geometry.attributes.position.setXYZ(0, pos1.x, pos1.y, pos1.z);
+        line.geometry.attributes.position.setXYZ(1, pos2.x, pos2.y, pos2.z);
+        line.geometry.attributes.position.needsUpdate = true;
+    }
+
     function updateSplineOutline() {
         for (let i = 0; i < lines.length; i++ ) {
             //position.setXYZ( i, point.x, point.y, point.z );
             const id1 = 2*i;
             const id2 = 2*i + 1;
-            lines[i].geometry.attributes.position.setXYZ(0, positions[id1].x, positions[id1].y, positions[id1].z);
-            lines[i].geometry.attributes.position.setXYZ(1, positions[id2].x, positions[id2].y, positions[id2].z);
-            lines[i].geometry.attributes.position.needsUpdate = true;
+            updateLine(lines[i], positions[id1], positions[id2]);
         }
-        updateProjectedPoint();
-        updatePlanePosition(positions[0], positions[1]);
+
+        // 1. take the end positions of the segments
+        let p1 = positions[0];
+        let p2 = positions[1];
+        let p3 = positions[2];
+        let p4 = positions[3];
+
+        // 2. create a plane with the normal being the direction of the segment and the
+        //    starting point being the start of the segment
+        updatePlanePosition(p1, p2);
+        let nPlane = M.sub(p2, p1);
+        let pPlane = p1;
+        // 3. project the other segment onto this plane
+        //    now we reduced the problem to a simple point to segment distance problem
+        let p3_ = projectToPlane(nPlane, pPlane, p3);
+        let p4_ = projectToPlane(nPlane, pPlane, p4);
+        proj3.position.set(p3_.x, p3_.y, p3_.z);
+        proj4.position.set(p4_.x, p4_.y, p4_.z);
+        updateLine(projectedLine, p3_, p4_);
+
+        // 4. we calculate that distance
+        // now p1 and the line segment p4_, p3_ lie in the same plane
+        // which means all we have to do is project the point p1 onto the line segment e34_
+        // this gives us lambda
+        let e34_ = M.sub(p4_, p3_);
+        let lambda = 0.5;
+        if (e34_.dot(e34_) > 1e-7) { // check if not parallel
+            lambda = M.sub(p1, p3_).dot(e34_) / e34_.dot(e34_);
+        }
+        // the point calculated is now on the "line" if there was any
+        lambda = clamp01(lambda);
+        let p34_line = M.add(p3, M.smul(lambda, M.sub(p4, p3)));
+        projected_point.position.set(p34_line.x, p34_line.y, p34_line.z);
+
+        // so we project it normally back to the line segment
+        // to be really accurate we have to project the point first on the segment 1,2
+        let p12_seg = projectToSegment(p34_line, p1, p2);
+        pSeg12.position.set(p12_seg.x, p12_seg.y, p12_seg.z);
+        // and now also this point onto the segment 3,4
+        // and now also project this normally to the other line segment
+        let p34_seg = projectToSegment(p12_seg, p3, p4);
+        pSeg34.position.set(p34_seg.x, p34_seg.y, p34_seg.z);
+
+        updateLine(shortest_distance_line, pSeg12.position, pSeg34.position);
+
     }
 
 

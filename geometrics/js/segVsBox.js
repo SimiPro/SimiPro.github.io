@@ -9,7 +9,7 @@ import * as M from './math_helper.js'
     let camera, scene, renderer;
     let height, width;
     const helperObjects = [];
-    let num_points = 5;
+    let num_points = 4;
     const positions = [];
 
     let rectangle;
@@ -25,6 +25,15 @@ import * as M from './math_helper.js'
     let lineShortestDist;
     let p1Shortest;
     let p2Shortest;
+
+    let box;
+    let boxWireframe;
+
+    const data = {
+        width: 100,
+        height: 100,
+        depth: 100
+    }
 
 
     const geometry = new THREE.BoxGeometry( 10, 10, 10 );
@@ -145,9 +154,11 @@ import * as M from './math_helper.js'
         plane.lookAt(p2);
     }
 
+
+
     function init() {
 
-        container = document.getElementById("SegToRectCorrect");
+        container = document.getElementById("SegVsBox");
         height = container.clientHeight;
         width = container.clientWidth;
         scene = new THREE.Scene();
@@ -191,6 +202,17 @@ import * as M from './math_helper.js'
         container.appendChild( renderer.domElement );
 
 
+        // gui
+
+        const gui = new GUI({autoPlace: false});
+        const cubeFolder = gui.addFolder('Cube')
+        cubeFolder.add(data, 'width', 1, 1000).onChange(generateGeometry);
+        cubeFolder.add(data, 'height', 1, 1000).onChange(generateGeometry);
+        cubeFolder.add(data, 'depth', 1, 1000).onChange(generateGeometry);
+        cubeFolder.open()
+
+        var guiHolder = document.getElementById("SegVsBoxGui");
+        guiHolder.appendChild(gui.domElement);
 
         // Controls
         const controls = new OrbitControls( camera, renderer.domElement );
@@ -214,10 +236,9 @@ import * as M from './math_helper.js'
 
         const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xff00ff];
         positions.push(new THREE.Vector3(0, 0, 0));
-        positions.push(new THREE.Vector3(0, 0, 100));
-        positions.push(new THREE.Vector3(100, 0, 0));
-        positions.push(new THREE.Vector3(0, 100, 0));
-        positions.push(new THREE.Vector3(0, 100, 100));
+        positions.push(new THREE.Vector3(0, 130, 0));
+        positions.push(new THREE.Vector3(200, 200, 0));
+        positions.push(new THREE.Vector3(100, 200, 0));
         for ( let i = 0; i < num_points; i ++ ) {
             addControlPoints( positions[ i ], colors[i] );
         }
@@ -233,16 +254,37 @@ import * as M from './math_helper.js'
 
         p1Shortest = addSphere(0xff0000);
         p2Shortest = addSphere(0xff0000);
-        lineShortestDist = addLine(p1Shortest, p2Shortest, 0x000000);
+        //lineShortestDist = addLine(p1Shortest, p2Shortest, 0x000000);
 
-        lineSeg = addLine(positions[3], positions[4], 0xff00ff);
+        lineSeg = addLine(positions[2], positions[3], 0xff00ff);
 
+        box = addBox(0x0000ff);
+        boxWireframe = addWireframe(box);
+    }
 
-        rectangle = addPlane(positions[0], positions[1], positions[2]);
-        updatePlaneTransformation();
-        updateProjectedPoint();
-        updateLine(lineSeg, positions[3], positions[4]);
-        updateShortestDistance();
+    function addWireframe(obj) {
+        const wireframe = new THREE.WireframeGeometry( obj.geometry );
+
+        const line = new THREE.LineSegments( wireframe );
+        line.material.depthTest = false;
+        line.material.opacity = 0.5;
+        line.material.transparent = true;
+        scene.add( line );
+        return line;
+    }
+
+    function generateGeometry() {
+        box.geometry = new THREE.BoxGeometry(data.width, data.height, data.depth);
+        boxWireframe.geometry = new THREE.WireframeGeometry( box.geometry );
+    }
+
+    function addBox(color) {
+        const geometry = new THREE.BoxGeometry( data.width, data.height, data.depth );
+        const material = new THREE.MeshPhongMaterial( {color: color} );
+        const boxi = new THREE.Mesh( geometry, material );
+        boxi.receiveShadow = true;
+        scene.add(boxi);
+        return boxi;
     }
 
     function addSphere(color) {
@@ -264,7 +306,7 @@ import * as M from './math_helper.js'
     function addControlPoints( position, color ) {
 
         const material = new THREE.MeshLambertMaterial( { color: color } );
-        //const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
+        //const material = new THREE.LineBasiFscMaterial( { color: 0x0000ff } );
         const object = new THREE.Mesh( geometry, material );
 
         if ( position ) {
@@ -314,8 +356,11 @@ import * as M from './math_helper.js'
 
     }
 
-    function getRectanglePoints() {
-        let p1 = positions[0];
+    function getCubePoints(p, R, dims) {
+        let p1L = new THREE.Vector3(dims[0], 0, 0);
+        let p1L = new THREE.Vector3(dims[0], 0, 0);
+        let p1L = new THREE.Vector3(dims[0], 0, 0);
+
         let p2 = positions[1];
         let p3 = positions[2];
 
@@ -448,19 +493,18 @@ import * as M from './math_helper.js'
     }
 
     function updateStuff() {
-
-        // 1. take the end positions of the segments
-        let p1 = positions[0];
-        let p2 = positions[1];
-        let p3 = positions[2];
-        let p4 = positions[3];
-
-        updatePlaneTransformation();
-        updateProjectedPoint();
-        updateLine(lineSeg, positions[3], positions[4]);
-        updateShortestDistance();
+        updateBoxPosition();
+        updateLine(lineSeg, positions[2], positions[3]);
     }
 
+
+    function updateBoxPosition() {
+        box.position.set(positions[0].x, positions[0].y, positions[0].z);
+        boxWireframe.position.set(positions[0].x, positions[0].y, positions[0].z);
+
+        box.lookAt(positions[1]);
+        boxWireframe.lookAt(positions[1]);
+    }
 
     function animate() {
 

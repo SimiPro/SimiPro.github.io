@@ -284,12 +284,43 @@ import * as M from './math_helper.js'
         // so we project it normally back to the line segment
         // to be really accurate we have to project the point first on the segment 1,2
         let p12_seg = projectToSegment(p34_line, p1, p2);
-        pSeg12.position.set(p12_seg.x, p12_seg.y, p12_seg.z);
         // and now also this point onto the segment 3,4
         // and now also project this normally to the other line segment
         let p34_seg = projectToSegment(p12_seg, p3, p4);
+
+        pSeg12.position.set(p12_seg.x, p12_seg.y, p12_seg.z);
         pSeg34.position.set(p34_seg.x, p34_seg.y, p34_seg.z);
 
+        return [pSeg12, pSeg34]
+    }
+
+    function SegSegShortestDist(p1, p2, p3, p4) {
+        // 2. create a plane with the normal being the direction of the segment and the
+        //    starting point being the start of the segment
+        let nPlane = M.sub(p2, p1);
+        let pPlane = p1;
+        // 3. project the other segment onto this plane
+        //    now we reduced the problem to a simple point to segment distance problem
+        let p3_ = projectToPlane(nPlane, pPlane, p3);
+        let p4_ = projectToPlane(nPlane, pPlane, p4);
+        // 4. we calculate that distance
+        // now p1 and the line segment p4_, p3_ lie in the same plane
+        // which means all we have to do is project the point p1 onto the line segment e34_
+        // this gives us lambda
+        let e34_ = M.sub(p4_, p3_);
+        let lambda = 0.5;
+        if (e34_.dot(e34_) > 1e-7) { // check if not parallel
+            lambda = M.sub(p1, p3_).dot(e34_) / e34_.dot(e34_);
+        }
+        // the point calculated is now on the "line" if there was any
+        lambda = clamp01(lambda);
+        let p34_line = M.add(p3, M.smul(lambda, M.sub(p4, p3)));
+        // so we project it normally back to the line segment
+        // to be really accurate we have to project the point first on the segment 1,2
+        let p12_seg = projectToSegment(p34_line, p1, p2);
+        // and now also this point onto the segment 3,4
+        // and now also project this normally to the other line segment
+        let p34_seg = projectToSegment(p12_seg, p3, p4);
         return [p12_seg, p34_seg]
     }
 

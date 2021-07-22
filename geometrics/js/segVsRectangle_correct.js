@@ -9,30 +9,26 @@ import * as M from './math_helper.js'
     let camera, scene, renderer;
     let height, width;
     const helperObjects = [];
-    let num_points = 4;
+    let num_points = 5;
     const positions = [];
-    const point = new THREE.Vector3();
-    const lines = [];
-    let plane;
-    let projected_point;
-    let pSeg34;
-    let pSeg12;
 
+    let rectangle;
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const onUpPosition = new THREE.Vector2();
     const onDownPosition = new THREE.Vector2();
 
+    let projS1;
+    let projS2;
+    let lineSeg;
+
+
     const geometry = new THREE.BoxGeometry( 10, 10, 10 );
     let transformControl;
-    let proj3, proj4;
-    let projectedLine;
-    let shortest_distance_line;
     init();
     animate();
 
-    function addLine(p1, p2, addToLines, color) {
-
+    function addLine(p1, p2, color) {
         const material = new THREE.LineBasicMaterial( { color: color } );
         let line_ps = [p1, p2]
         const geometry = new THREE.BufferGeometry().setFromPoints(line_ps);
@@ -40,47 +36,126 @@ import * as M from './math_helper.js'
         let line = new THREE.Line(geometry, material );
         line.castShadow = true;
         line.receiveShadow = true;
-        if (addToLines) {
-            lines.push(line);
-        }
-
         scene.add(line);
         return line;
     }
 
-    function addPlane(p1, p2) {
-        const geometry = new THREE.PlaneGeometry( 500, 500     );
-        const material = new THREE.MeshBasicMaterial( {color: 0xccaca9, side: THREE.DoubleSide} );
+    function addPlane(p1, p2, p3) {
+        // we define the plane with the edge p2 - p1
+        // and an additional point p3 on the plane but describing nothing else
+        // then the normal is just the cross product
+        // and the last edge is then normmal to p2, p1 and the plane normal
 
-        plane = new THREE.Mesh( geometry, material );
-        plane.position.set(p1.x,p1.y,p1.z);
-        // plane.position.set(p1);
-       // plane.rotation.set
+        let u1 = M.sub(p2, p1);
+        let u2_ = M.sub(p3, p1);
+
+        let ext1 = u1.length();
+        let ext2 = u2_.length();
+
+        u1.normalize();
+        u2_.normalize();
+
+        let nNormal = M.cross(u1, u2_);
+        let u2 = M.cross(u1, nNormal);
+        u2.normalize();
+
+        let p4 = M.add(p2, M.sub(p3, p1));
+
+        u1 = M.smul(ext1, u1);
+        u2 = M.smul(ext2, u2);
+
+        // check if we have to turn u2 because it could point into the wrong direction
+        if (M.sub(M.add(p1, u2), p3).length() > M.sub(M.add(p1, u2.clone().negate()), p3).length()) {
+            u2.negate();
+        }
+
+        let v1 = p1;
+        let v2 = M.add(p1, u1);
+        let v3 = M.add(p1, u2);
+        let v4 = M.add(v3, u1);
+
+        const geometry = new THREE.BufferGeometry();
+        const vertices = new Float32Array( [
+            v1.x, v1.y, v1.z,
+            v2.x, v2.y, v2.z,
+            v3.x, v3.y, v3.z,
+
+            v3.x, v3.y, v3.z,
+            v4.x, v4.y, v4.z,
+            v2.x, v2.y, v2.z
+        ]);
+        // itemSize = 3 because there are 3 values (components) per vertex
+        geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+        const material = new THREE.MeshBasicMaterial( {color: 0xccaca9, side: THREE.DoubleSide} );
+        let plane = new THREE.Mesh( geometry, material );
         scene.add( plane );
+        return plane;
     }
 
+    function updatePlaneTransformation() {
+        let p1 = positions[0];
+        let p2 = positions[1];
+        let p3 = positions[2];
 
+        let u1 = M.sub(p2, p1);
+        let u2_ = M.sub(p3, p1);
 
-    function updatePlanePosition(p1, p2) {
+        let ext1 = u1.length();
+        let ext2 = u2_.length();
+
+        u1.normalize();
+        u2_.normalize();
+
+        let nNormal = M.cross(u1, u2_);
+        let u2 = M.cross(u1, nNormal);
+        u2.normalize();
+
+        let p4 = M.add(p2, M.sub(p3, p1));
+
+        u1 = M.smul(ext1, u1);
+        u2 = M.smul(ext2, u2);
+
+        // check if we have to turn u2 because it could point into the wrong direction
+        if (M.sub(M.add(p1, u2), p3).length() > M.sub(M.add(p1, u2.clone().negate()), p3).length()) {
+            u2.negate();
+        }
+
+        let v1 = p1;
+        let v2 = M.add(p1, u1);
+        let v3 = M.add(p1, u2);
+        let v4 = M.add(v3, u1);
+
+        // update rectangle points
+        rectangle.geometry.attributes.position.setXYZ(0, v1.x, v1.y, v1.z);
+        rectangle.geometry.attributes.position.setXYZ(1, v2.x, v2.y, v2.z);
+        rectangle.geometry.attributes.position.setXYZ(2, v3.x, v3.y, v3.z);
+        rectangle.geometry.attributes.position.setXYZ(3, v3.x, v3.y, v3.z);
+        rectangle.geometry.attributes.position.setXYZ(4, v4.x, v4.y, v4.z);
+        rectangle.geometry.attributes.position.setXYZ(5, v2.x, v2.y, v2.z);
+        rectangle.geometry.attributes.position.needsUpdate = true;
+
+    }
+
+    function updatePlanePosition(plane, p1, p2) {
         plane.position.set(p1.x,p1.y,p1.z);
         plane.lookAt(p2);
     }
 
     function init() {
 
-        container = document.getElementById("SegVsSeg");
+        container = document.getElementById("SegToRectCorrect");
         height = container.clientHeight;
         width = container.clientWidth;
         scene = new THREE.Scene();
         scene.background = new THREE.Color( 0xf0f0f0 );
 
         camera = new THREE.PerspectiveCamera( 40, width/height, 1, 10000 );
-        camera.position.set( -500, 150, 500 );
+        camera.position.set( 0, 150, 250 );
         scene.add( camera );
 
         scene.add( new THREE.AmbientLight( 0xf0f0f0 ) );
         const light = new THREE.SpotLight( 0xffffff, 1.5 );
-        light.position.set( 0, 1500, 500 );
+        light.position.set( 0, 1500, 200 );
         light.angle = Math.PI * 0.2;
         light.castShadow = true;
         light.shadow.camera.near = 200;
@@ -126,20 +201,19 @@ import * as M from './math_helper.js'
         scene.add( transformControl );
 
         transformControl.addEventListener( 'objectChange', function () {
-            updateSplineOutline();
+            updateStuff();
         });
 
         container.addEventListener( 'pointerdown', onPointerDown );
         container.addEventListener( 'pointerup', onPointerUp );
         container.addEventListener( 'pointermove', onPointerMove );
 
+        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xff00ff];
+        positions.push(new THREE.Vector3(0, 0, 0));
+        positions.push(new THREE.Vector3(0, 0, 100));
+        positions.push(new THREE.Vector3(100, 0, 0));
         positions.push(new THREE.Vector3(0, 100, 0));
         positions.push(new THREE.Vector3(0, 100, 100));
-        positions.push(new THREE.Vector3(100, 0, 50));
-        positions.push(new THREE.Vector3(0, 0, 50));
-
-
-        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff];
         for ( let i = 0; i < num_points; i ++ ) {
             addControlPoints( positions[ i ], colors[i] );
         }
@@ -150,29 +224,16 @@ import * as M from './math_helper.js'
             positions.push( helperObjects[ i ].position );
         }
 
-        addLine(positions[0], positions[1], true, 0x0000ff);
-        addLine(positions[2], positions[3], true, 0x0000ff)
+        projS1 = addSphere(0xffffff);
+        projS2 = addSphere(0xffffff);
 
-        addPlane(positions[0], positions[1]);
+        lineSeg = addLine(positions[3], positions[4], 0xff00ff);
 
 
-        const sgeometry = new THREE.SphereGeometry( 7, 32, 32 );
-        const smaterial = new THREE.MeshBasicMaterial( {color: 0xff0000} );
-        const sphere = new THREE.Mesh( sgeometry, smaterial );
-        projected_point = sphere;
-        scene.add( sphere );
-
-        proj3 = addSphere(colors[2]);
-        proj4 = addSphere(colors[3]);
-
-        pSeg12 = addSphere(0xffffff);
-        pSeg34 = addSphere(0xffffff);
-
-        shortest_distance_line = addLine(pSeg12.position, pSeg34.position, false, 0x000000);
-        projectedLine = addLine(proj3.position, proj4.position, false, 0x0000ff);
-
-        updateSplineOutline();
-
+        rectangle = addPlane(positions[0], positions[1], positions[2]);
+        updatePlaneTransformation();
+        updateProjectedPoint();
+        updateLine(lineSeg, positions[3], positions[4]);
     }
 
     function addSphere(color) {
@@ -189,11 +250,6 @@ import * as M from './math_helper.js'
         let v = M.sub(p, pPlane);
         let dist = M.dot(v, nPlane);
         return M.sub(p, M.smul(dist, nPlane));
-    }
-
-    function setNewProjectedPoint(position) {
-        projected_point.position.set(position.x, position.y, position.z);
-        // projected_point.geometry.attributes.position.needsUpdate = true;
     }
 
     function addControlPoints( position, color ) {
@@ -219,13 +275,16 @@ import * as M from './math_helper.js'
     }
 
     function clamp01(t) {
-        if (t > 1)
-            return 1
-        if (t < 0)
-            return 0;
-        return t;
+        return clamp(t, 0, 1);
     }
 
+    function clamp(t, mini, maxi) {
+        if (t > maxi)
+            return maxi
+        if (t < mini)
+            return mini;
+        return t;
+    }
 
     function projectToSegment(p, a, b) {
         let ab = M.sub(b, a);
@@ -239,12 +298,45 @@ import * as M from './math_helper.js'
     }
 
     function updateProjectedPoint() {
-        const p1 = positions[0];
-        const p2 = positions[1];
-        const p3 = positions[2];
-        const projectedPoint = projectToSegment(p3, p1, p2);
-        setNewProjectedPoint(projectedPoint)
+        const s1Proj = pointToRectangle(positions[3]);
+        const s2Proj = pointToRectangle(positions[4]);
+        projS1.position.set(s1Proj.x, s1Proj.y, s1Proj.z);
+        projS2.position.set(s2Proj.x, s2Proj.y, s2Proj.z);
 
+    }
+
+    function pointToRectangle(q) {
+        const p0 = positions[0];
+        const p1 = positions[1];
+        const p2 = positions[2];
+
+        const p = p0;
+
+        let u1 = M.sub(p1, p0);
+        let u2_ = M.sub(p2, p0);
+
+        let ext1 = u1.length();
+        let ext2 = u2_.length();
+
+        u1.normalize();
+        u2_.normalize();
+
+        let nNormal = M.cross(u1, u2_);
+        let u2 = M.cross(u1, nNormal);
+
+
+        // check if we have to turn u2 because it could point into the wrong direction
+        if (M.sub(M.add(p, u2), p2).length() > M.sub(M.add(p, u2.clone().negate()), p2).length()) {
+            u2.negate();
+        }
+
+        let diff = M.sub(q, p);
+        let s = clamp(u1.dot(diff), 0, ext1);
+        let t = clamp(u2.dot(diff), 0, ext2);
+
+
+
+        return M.add(M.add(p, M.smul(s, u1)), M.smul(t, u2));
     }
 
     function updateLine(line, pos1, pos2) {
@@ -253,53 +345,7 @@ import * as M from './math_helper.js'
         line.geometry.attributes.position.needsUpdate = true;
     }
 
-    function calculateShortestDistance(p1, p2, p3, p4) {
-        // 2. create a plane with the normal being the direction of the segment and the
-        //    starting point being the start of the segment
-        updatePlanePosition(p1, p2);
-        let nPlane = M.sub(p2, p1);
-        let pPlane = p1;
-        // 3. project the other segment onto this plane
-        //    now we reduced the problem to a simple point to segment distance problem
-        let p3_ = projectToPlane(nPlane, pPlane, p3);
-        let p4_ = projectToPlane(nPlane, pPlane, p4);
-        proj3.position.set(p3_.x, p3_.y, p3_.z);
-        proj4.position.set(p4_.x, p4_.y, p4_.z);
-        updateLine(projectedLine, p3_, p4_);
-
-        // 4. we calculate that distance
-        // now p1 and the line segment p4_, p3_ lie in the same plane
-        // which means all we have to do is project the point p1 onto the line segment e34_
-        // this gives us lambda
-        let e34_ = M.sub(p4_, p3_);
-        let lambda = 0.5;
-        if (e34_.dot(e34_) > 1e-7) { // check if not parallel
-            lambda = M.sub(p1, p3_).dot(e34_) / e34_.dot(e34_);
-        }
-        // the point calculated is now on the "line" if there was any
-        lambda = clamp01(lambda);
-        let p34_line = M.add(p3, M.smul(lambda, M.sub(p4, p3)));
-        projected_point.position.set(p34_line.x, p34_line.y, p34_line.z);
-
-        // so we project it normally back to the line segment
-        // to be really accurate we have to project the point first on the segment 1,2
-        let p12_seg = projectToSegment(p34_line, p1, p2);
-        pSeg12.position.set(p12_seg.x, p12_seg.y, p12_seg.z);
-        // and now also this point onto the segment 3,4
-        // and now also project this normally to the other line segment
-        let p34_seg = projectToSegment(p12_seg, p3, p4);
-        pSeg34.position.set(p34_seg.x, p34_seg.y, p34_seg.z);
-
-        return [p12_seg, p34_seg]
-    }
-
-    function updateSplineOutline() {
-        for (let i = 0; i < lines.length; i++ ) {
-            //position.setXYZ( i, point.x, point.y, point.z );
-            const id1 = 2*i;
-            const id2 = 2*i + 1;
-            updateLine(lines[i], positions[id1], positions[id2]);
-        }
+    function updateStuff() {
 
         // 1. take the end positions of the segments
         let p1 = positions[0];
@@ -307,11 +353,9 @@ import * as M from './math_helper.js'
         let p3 = positions[2];
         let p4 = positions[3];
 
-        let res = calculateShortestDistance(p1, p2, p3, p4);
-        let pSeg12 = res[0];
-        let pSeg34 = res[1];
-        updateLine(shortest_distance_line, pSeg12.position, pSeg34.position);
-
+        updatePlaneTransformation();
+        updateProjectedPoint();
+        updateLine(lineSeg, positions[3], positions[4]);
     }
 
 

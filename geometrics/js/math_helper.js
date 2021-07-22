@@ -23,7 +23,11 @@ export function smul(t, v) {
 }
 
 export function cross(u1_, u2_) {
-
+    let u1 = u1_.clone();
+    let u2 = u2_.clone();
+    let axis = u1.clone();
+    axis.cross(u2);
+    return axis;
 }
 
 export function rotateAlignNaive(u1_, u2_) {

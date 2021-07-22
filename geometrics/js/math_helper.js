@@ -155,7 +155,7 @@ export function shortestDistanceRectangleSegment(p0, p1, p2, s1, s2) {
     let min_p1 = res[0];
     let min_p2 = res[1];
 
-    let R = getRectanglePoints();
+    let R = getRectanglePoints(p0, p1, p2);
     let r1 = R[0], r2 = R[1], r3 = R[2], r4 = R[3];
 
     res = segSegShortestDist(s1, s2, r1, r2);

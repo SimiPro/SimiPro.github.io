@@ -3,6 +3,7 @@ import { OrbitControls } from '../../build/OrbitControls.js';
 import { TransformControls } from '../../build/TransformControls.js';
 import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
 import * as M from './math_helper.js'
+import {shortestDistanceRectangleSegment} from "./math_helper.js";
 
 (function() {
     let container;
@@ -249,6 +250,12 @@ import * as M from './math_helper.js'
             positions.push( helperObjects[ i ].position );
         }
 
+        // add coordinate system
+        addArrow(new THREE.Vector3(-100, 0 ,0), new THREE.Vector3(1, 0, 0), 0xff0000);
+        addArrow(new THREE.Vector3(-100, 0 ,0), new THREE.Vector3(0, 1, 0), 0x00ff00);
+        addArrow(new THREE.Vector3(-100, 0 ,0), new THREE.Vector3(0, 0, 1), 0x0000ff);
+
+
         projS1 = addSphere(0xffffff);
         projS2 = addSphere(0xffffff);
 
@@ -260,6 +267,15 @@ import * as M from './math_helper.js'
 
         box = addBox(0x0000ff);
         boxWireframe = addWireframe(box);
+
+        updateStuff();
+    }
+
+    function addArrow(p, v_, color) {
+        let dir = v_.clone();
+        dir.normalize();
+        const arrowHelper = new THREE.ArrowHelper( dir, p, 10, color );
+        scene.add( arrowHelper );
     }
 
     function addWireframe(obj) {
@@ -295,14 +311,6 @@ import * as M from './math_helper.js'
         return sphere;
     }
 
-    function projectToPlane(nPlane_, pPlane, p) {
-        let nPlane = nPlane_.clone();
-        nPlane.normalize();
-        let v = M.sub(p, pPlane);
-        let dist = M.dot(v, nPlane);
-        return M.sub(p, M.smul(dist, nPlane));
-    }
-
     function addControlPoints( position, color ) {
 
         const material = new THREE.MeshLambertMaterial( { color: color } );
@@ -322,111 +330,49 @@ import * as M from './math_helper.js'
         scene.add( object );
         helperObjects.push( object );
         return object;
-
     }
 
-    function clamp01(t) {
-        return clamp(t, 0, 1);
-    }
+    function calcShortestDistance(p,R, dims, s1, s2) {
+        // we calculate shortest distance to
+        // dims = [width, height, depth] => x, y, z
+        let u1 = M.smul(dims[0],  new THREE.Vector3(1, 0 , 0));
+        let u2 = M.smul(dims[1], new THREE.Vector3(0, 1 , 0));
+        let u3 = M.smul(dims[2], new THREE.Vector3(0, 0 , 1));
 
-    function clamp(t, mini, maxi) {
-        if (t > maxi)
-            return maxi
-        if (t < mini)
-            return mini;
-        return t;
-    }
+        let p1 = new THREE.Vector3(p.x - dims[0]/2., p.y - dims[1]/2., p.z - dims[2]/2);
+        let p2 = M.add(p1, u2);
+        let p3 = M.add(M.add(p1, u1), u2);
+        let p4 = M.add(p1, u1);
+        let p5 = M.add(p1, u3);
+        let p6 = M.add(p2, u3);
+        let p7 = M.add(p3, u3);
+        let p8 = M.add(p4, u3);
 
-    function projectToSegment(p, a, b) {
-        let ab = M.sub(b, a);
-        let t = 1;
-        if (M.dot(ab, ab) >= 1e-5) {
-            t = M.dot(M.sub(p, a), ab);
-            t = t / M.dot(ab, ab);
-            t = clamp01(t);
-        }
-        return M.add(a, M.smul(t, ab));
-    }
+        let plane1 = [p1, p2, p3, p4];
+        let plane2 = [p1, p4, p8, p5];
+        let plane3 = [p5, p6, p7, p8];
+        let plane4 = [p8, p7, p3, p4];
+        let plane5 = [p5, p6, p2, p1];
+        let plane6 = [p6, p2, p3, p7];
+        let planes = [plane1, plane2, plane3, plane4, plane5, plane6];
 
-    function updateProjectedPoint() {
-        const s1Proj = pointToRectangle(positions[3]);
-        const s2Proj = pointToRectangle(positions[4]);
-        projS1.position.set(s1Proj.x, s1Proj.y, s1Proj.z);
-        projS2.position.set(s2Proj.x, s2Proj.y, s2Proj.z);
-
-    }
-
-    function getCubePoints(p, R, dims) {
-        let p1L = new THREE.Vector3(dims[0], 0, 0);
-        let p1L = new THREE.Vector3(dims[0], 0, 0);
-        let p1L = new THREE.Vector3(dims[0], 0, 0);
-
-        let p2 = positions[1];
-        let p3 = positions[2];
-
-        let u1 = M.sub(p2, p1);
-        let u2_ = M.sub(p3, p1);
-
-        let ext1 = u1.length();
-        let ext2 = u2_.length();
-
-        u1.normalize();
-        u2_.normalize();
-
-        let nNormal = M.cross(u1, u2_);
-        let u2 = M.cross(u1, nNormal);
-        u2.normalize();
-
-        let p4 = M.add(p2, M.sub(p3, p1));
-
-        u1 = M.smul(ext1, u1);
-        u2 = M.smul(ext2, u2);
-
-        // check if we have to turn u2 because it could point into the wrong direction
-        if (M.sub(M.add(p1, u2), p3).length() > M.sub(M.add(p1, u2.clone().negate()), p3).length()) {
-            u2.negate();
+        let min_dist = 1000000;
+        let p1_min;
+        let p2_min;
+        for (let plane of planes) {
+            let res = M.shortestDistanceRectangleSegment(plane[0], plane[1], plane[2], s1, s2);
+            if (res[2] < min_dist) {
+                min_dist = res[2];
+                p1_min = res[0];
+                p2_min = res[1];
+            }
         }
 
-        let v1 = p1;
-        let v2 = M.add(p1, u1);
-        let v3 = M.add(p1, u2);
-        let v4 = M.add(v3, u1);
-
-        return [v1, v2, v3, v4];
-    }
-
-    function pointToRectangle(q) {
-        const p0 = positions[0];
-        const p1 = positions[1];
-        const p2 = positions[2];
-
-        const p = p0;
-
-        let u1 = M.sub(p1, p0);
-        let u2_ = M.sub(p2, p0);
-
-        let ext1 = u1.length();
-        let ext2 = u2_.length();
-
-        u1.normalize();
-        u2_.normalize();
-
-        let nNormal = M.cross(u1, u2_);
-        let u2 = M.cross(u1, nNormal);
+        p1Shortest.position.set(p1_min.x, p1_min.y, p1_min.z);
+        p2Shortest.position.set(p2_min.x, p2_min.y, p2_min.z);
+        return p1;
 
 
-        // check if we have to turn u2 because it could point into the wrong direction
-        if (M.sub(M.add(p, u2), p2).length() > M.sub(M.add(p, u2.clone().negate()), p2).length()) {
-            u2.negate();
-        }
-
-        let diff = M.sub(q, p);
-        let s = clamp(u1.dot(diff), 0, ext1);
-        let t = clamp(u2.dot(diff), 0, ext2);
-
-
-
-        return M.add(M.add(p, M.smul(s, u1)), M.smul(t, u2));
     }
 
     function updateLine(line, pos1, pos2) {
@@ -435,66 +381,11 @@ import * as M from './math_helper.js'
         line.geometry.attributes.position.needsUpdate = true;
     }
 
-    function updateShortestDistance() {
-        let s1 = positions[3];
-        let s2 = positions[4];
-
-        let s1_proj = projS1.position;
-        let s2_proj = projS2.position;
-
-
-        let res1 = M.segSegShortestDist(s1, s2, s1_proj, s2_proj);
-        let min_dist = M.sub(res1[0], res1[1]).length();
-        let min_p1 = res1[0];
-        let min_p2 = res1[1];
-
-        let R = getRectanglePoints();
-        let r1 = R[0], r2 = R[1], r3 = R[2], r4 = R[3];
-
-        let res2 = M.segSegShortestDist(s1, s2, r1, r2);
-        let dist2 = M.sub(res2[0], res2[1]);
-        if (dist2 < min_dist) {
-            min_dist = dist2;
-            min_p1 = res2[0];
-            min_p2 = res2[1];
-        }
-
-        let res3 = M.segSegShortestDist(s1, s2, r2, r3);
-        let dist3 = M.sub(res3[0], res3[1]);
-        if (dist3 < min_dist) {
-            min_dist = dist3;
-            min_p1 = res3[0];
-            min_p2 = res3[1];
-        }
-
-        let res4 = M.segSegShortestDist(s1, s2, r3, r4);
-        let dist4 = M.sub(res4[0], res4[1]);
-        if (dist4 < min_dist) {
-            min_dist = dist4;
-            min_p1 = res4[0];
-            min_p2 = res4[1];
-        }
-
-        let res5 = M.segSegShortestDist(s1, s2, r4, r1);
-        let dist5 = M.sub(res5[0], res5[1]);
-        if (dist5 < min_dist) {
-            min_dist = dist5;
-            min_p1 = res5[0];
-            min_p2 = res5[1];
-        }
-
-
-        p1Shortest.position.set(min_p1.x, min_p1.y, min_p1.z);
-        p2Shortest.position.set(min_p2.x, min_p2.y, min_p2.z);
-
-        updateLine(lineShortestDist, min_p1, min_p2);
-
-
-    }
-
     function updateStuff() {
         updateBoxPosition();
         updateLine(lineSeg, positions[2], positions[3]);
+        // (p,R, dims, s1, s2)
+        calcShortestDistance(box.position, new THREE.Matrix3().identity(), [data.width, data.height, data.depth], positions[2], positions[3]);
     }
 
 

@@ -3,7 +3,7 @@ import { OrbitControls } from '../../build/OrbitControls.js';
 import { TransformControls } from '../../build/TransformControls.js';
 import { GUI } from '../../build/jsm/libs/dat.gui.module.js';
 import * as M from './math_helper.js'
-import {shortestDistanceRectangleSegment} from "./math_helper.js";
+import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrtho} from "./math_helper.js";
 
 (function() {
     let container;
@@ -36,6 +36,7 @@ import {shortestDistanceRectangleSegment} from "./math_helper.js";
         depth: 100
     }
 
+    let currPlane = [];
 
     const geometry = new THREE.BoxGeometry( 10, 10, 10 );
     let transformControl;
@@ -255,6 +256,10 @@ import {shortestDistanceRectangleSegment} from "./math_helper.js";
         addArrow(new THREE.Vector3(-100, 0 ,0), new THREE.Vector3(0, 1, 0), 0x00ff00);
         addArrow(new THREE.Vector3(-100, 0 ,0), new THREE.Vector3(0, 0, 1), 0x0000ff);
 
+        currPlane.push(addSphere(0xff00ee));
+        currPlane.push(addSphere(0xff00ee));
+        currPlane.push(addSphere(0xff00ee));
+        currPlane.push(addSphere(0xff00ee));
 
         projS1 = addSphere(0xffffff);
         projS2 = addSphere(0xffffff);
@@ -332,7 +337,22 @@ import {shortestDistanceRectangleSegment} from "./math_helper.js";
         return object;
     }
 
-    function calcShortestDistance(p,R, dims, s1, s2) {
+    function worldToLocal(p, R, q_) {
+        return q_.clone();
+        let q = q_.clone();
+        return M.sub(q.applyMatrix3(R.clone().transpose()), p);
+    }
+
+    function localToWorld(p, R, q_) {
+        return q_.clone();
+        let q = q_.clone();
+        return M.add(p, q.applyMatrix3(R));
+    }
+
+    function calcShortestDistance(p,R, dims, s1_, s2_) {
+        let s1 = worldToLocal(p, R, s1_);
+        let s2 = worldToLocal(p, R, s2_);
+
         // we calculate shortest distance to
         // dims = [width, height, depth] => x, y, z
         let u1 = M.smul(dims[0],  new THREE.Vector3(1, 0 , 0));
@@ -356,17 +376,28 @@ import {shortestDistanceRectangleSegment} from "./math_helper.js";
         let plane6 = [p6, p2, p3, p7];
         let planes = [plane1, plane2, plane3, plane4, plane5, plane6];
 
+        let i_draw = 0;
+        let i = 0;
         let min_dist = 1000000;
         let p1_min;
         let p2_min;
         for (let plane of planes) {
-            let res = M.shortestDistanceRectangleSegment(plane[0], plane[1], plane[2], s1, s2);
-            if (res[2] < min_dist) {
-                min_dist = res[2];
-                p1_min = res[0];
-                p2_min = res[1];
+            if (i_draw ===i) {
+                for (let j = 0; j < 4; j++) {
+                    currPlane[j].position.set(plane[j].x, plane[j].y, plane[j].z);
+                }
+                let res = M.shortestDistanceRectangleSegment_rOrtho(plane[0], plane[1], plane[2], plane[3], s1, s2);
+                if (res[2] < min_dist) {
+                    min_dist = res[2];
+                    p1_min = res[0];
+                    p2_min = res[1];
+                }
             }
+            i = i +1;
         }
+
+        p1_min = localToWorld(p, R, p1_min);
+        p2_min = localToWorld(p, R, p2_min);
 
         p1Shortest.position.set(p1_min.x, p1_min.y, p1_min.z);
         p2Shortest.position.set(p2_min.x, p2_min.y, p2_min.z);
@@ -385,7 +416,17 @@ import {shortestDistanceRectangleSegment} from "./math_helper.js";
         updateBoxPosition();
         updateLine(lineSeg, positions[2], positions[3]);
         // (p,R, dims, s1, s2)
-        calcShortestDistance(box.position, new THREE.Matrix3().identity(), [data.width, data.height, data.depth], positions[2], positions[3]);
+        let R = new THREE.Matrix4();
+        R.makeRotationFromQuaternion(box.quaternion);
+        let rx = new THREE.Vector3(), ry  = new THREE.Vector3(), rz  = new THREE.Vector3();
+        R.extractBasis(rx, ry, rz);
+        let RL = new THREE.Matrix3();
+        RL.set(rx.x, ry.x, rz.x,
+            rx.y, ry.y, rz.y,
+            rx.z, ry.z, rz.z);
+
+        console.log(RL);
+        calcShortestDistance(box.position,RL, [data.width, data.height, data.depth], positions[2], positions[3]);
     }
 
 

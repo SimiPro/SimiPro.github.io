@@ -84,6 +84,24 @@ export function clamp(t, mini, maxi) {
     return t;
 }
 
+export function pointToRectangle_rOrtho(r0, r1, r2,r3, q) {
+    const r = r0;
+
+    let u1 = sub(r1, r0);
+    let u2 = sub(r2, r0);
+
+    let ext1 = u1.length();
+    let ext2 = u2.length();
+
+    u1.normalize();
+    u2.normalize();
+
+    let diff = sub(q, r);
+    let s = clamp(u1.dot(diff), 0, ext1);
+    let t = clamp(u2.dot(diff), 0, ext2);
+
+    return add(add(r, smul(s, u1)), smul(t, u2));
+}
 
 export function pointToRectangle(p0, p1, p2, q) {
     const p = p0;
@@ -142,6 +160,51 @@ export function getRectanglePoints(p1, p2, p3) {
     let v4 = add(v3, u1);
 
     return [v1, v2, v3, v4];
+}
+
+export function shortestDistanceRectangleSegment_rOrtho(r1, r2, r3, r4, s1, s2) {
+    let s1_proj = pointToRectangle_rOrtho(r1, r2, r3, r4, s1);
+    let s2_proj = pointToRectangle_rOrtho(r1, r2, r3, r4, s2);
+
+
+    let res = segSegShortestDist(s1, s2, s1_proj, s2_proj);
+    let min_dist = sub(res[0], res[1]).length();
+    let min_p1 = res[0];
+    let min_p2 = res[1];
+
+    res = segSegShortestDist(s1, s2, r1, r2);
+    let dist = sub(res[0], res[1]);
+    if (dist < min_dist) {
+        min_dist = dist;
+        min_p1 = res[0];
+        min_p2 = res[1];
+    }
+
+    res = segSegShortestDist(s1, s2, r2, r3);
+    dist = sub(res[0], res[1]);
+    if (dist < min_dist) {
+        min_dist = dist;
+        min_p1 = res[0];
+        min_p2 = res[1];
+    }
+
+    res = segSegShortestDist(s1, s2, r3, r4);
+    dist = sub(res[0], res[1]);
+    if (dist < min_dist) {
+        min_dist = dist;
+        min_p1 = res[0];
+        min_p2 = res[1];
+    }
+
+    res = segSegShortestDist(s1, s2, r4, r1);
+    dist = sub(res[0], res[1]);
+    if (dist < min_dist) {
+        min_dist = dist;
+        min_p1 = res[0];
+        min_p2 = res[1];
+    }
+
+    return [min_p1, min_p2, min_dist];
 }
 
 export function shortestDistanceRectangleSegment(p0, p1, p2, s1, s2) {

@@ -214,9 +214,9 @@ import * as M from './math_helper.js'
 
         const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xff00ff];
         positions.push(new THREE.Vector3(0, 0, 0));
-        positions.push(new THREE.Vector3(0, 0, 100));
-        positions.push(new THREE.Vector3(100, 0, 0));
         positions.push(new THREE.Vector3(0, 100, 0));
+        positions.push(new THREE.Vector3(100, 0, 0));
+        positions.push(new THREE.Vector3(0, 100, 50));
         positions.push(new THREE.Vector3(0, 100, 100));
         for ( let i = 0; i < num_points; i ++ ) {
             addControlPoints( positions[ i ], colors[i] );

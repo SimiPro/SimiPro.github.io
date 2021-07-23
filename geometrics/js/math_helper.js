@@ -88,7 +88,7 @@ export function pointToRectangle_rOrtho(r0, r1, r2,r3, q) {
     const r = r0;
 
     let u1 = sub(r1, r0);
-    let u2 = sub(r2, r0);
+    let u2 = sub(r3, r0);
 
     let ext1 = u1.length();
     let ext2 = u2.length();
@@ -127,7 +127,6 @@ export function pointToRectangle(p0, p1, p2, q) {
     let diff = sub(q, p);
     let s = clamp(u1.dot(diff), 0, ext1);
     let t = clamp(u2.dot(diff), 0, ext2);
-
 
     return add(add(p, smul(s, u1)), smul(t, u2));
 }

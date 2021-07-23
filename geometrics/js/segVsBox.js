@@ -55,107 +55,6 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
         return line;
     }
 
-    function addPlane(p1, p2, p3) {
-        // we define the plane with the edge p2 - p1
-        // and an additional point p3 on the plane but describing nothing else
-        // then the normal is just the cross product
-        // and the last edge is then normmal to p2, p1 and the plane normal
-
-        let u1 = M.sub(p2, p1);
-        let u2_ = M.sub(p3, p1);
-
-        let ext1 = u1.length();
-        let ext2 = u2_.length();
-
-        u1.normalize();
-        u2_.normalize();
-
-        let nNormal = M.cross(u1, u2_);
-        let u2 = M.cross(u1, nNormal);
-        u2.normalize();
-
-        let p4 = M.add(p2, M.sub(p3, p1));
-
-        u1 = M.smul(ext1, u1);
-        u2 = M.smul(ext2, u2);
-
-        // check if we have to turn u2 because it could point into the wrong direction
-        if (M.sub(M.add(p1, u2), p3).length() > M.sub(M.add(p1, u2.clone().negate()), p3).length()) {
-            u2.negate();
-        }
-
-        let v1 = p1;
-        let v2 = M.add(p1, u1);
-        let v3 = M.add(p1, u2);
-        let v4 = M.add(v3, u1);
-
-        const geometry = new THREE.BufferGeometry();
-        const vertices = new Float32Array( [
-            v1.x, v1.y, v1.z,
-            v2.x, v2.y, v2.z,
-            v3.x, v3.y, v3.z,
-
-            v3.x, v3.y, v3.z,
-            v4.x, v4.y, v4.z,
-            v2.x, v2.y, v2.z
-        ]);
-        // itemSize = 3 because there are 3 values (components) per vertex
-        geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
-        const material = new THREE.MeshBasicMaterial( {color: 0xccaca9, side: THREE.DoubleSide} );
-        let plane = new THREE.Mesh( geometry, material );
-        scene.add( plane );
-        return plane;
-    }
-
-    function updatePlaneTransformation() {
-        let p1 = positions[0];
-        let p2 = positions[1];
-        let p3 = positions[2];
-
-        let u1 = M.sub(p2, p1);
-        let u2_ = M.sub(p3, p1);
-
-        let ext1 = u1.length();
-        let ext2 = u2_.length();
-
-        u1.normalize();
-        u2_.normalize();
-
-        let nNormal = M.cross(u1, u2_);
-        let u2 = M.cross(u1, nNormal);
-        u2.normalize();
-
-        let p4 = M.add(p2, M.sub(p3, p1));
-
-        u1 = M.smul(ext1, u1);
-        u2 = M.smul(ext2, u2);
-
-        // check if we have to turn u2 because it could point into the wrong direction
-        if (M.sub(M.add(p1, u2), p3).length() > M.sub(M.add(p1, u2.clone().negate()), p3).length()) {
-            u2.negate();
-        }
-
-        let v1 = p1;
-        let v2 = M.add(p1, u1);
-        let v3 = M.add(p1, u2);
-        let v4 = M.add(v3, u1);
-
-        // update rectangle points
-        rectangle.geometry.attributes.position.setXYZ(0, v1.x, v1.y, v1.z);
-        rectangle.geometry.attributes.position.setXYZ(1, v2.x, v2.y, v2.z);
-        rectangle.geometry.attributes.position.setXYZ(2, v3.x, v3.y, v3.z);
-        rectangle.geometry.attributes.position.setXYZ(3, v3.x, v3.y, v3.z);
-        rectangle.geometry.attributes.position.setXYZ(4, v4.x, v4.y, v4.z);
-        rectangle.geometry.attributes.position.setXYZ(5, v2.x, v2.y, v2.z);
-        rectangle.geometry.attributes.position.needsUpdate = true;
-
-    }
-
-    function updatePlanePosition(plane, p1, p2) {
-        plane.position.set(p1.x,p1.y,p1.z);
-        plane.lookAt(p2);
-    }
-
 
 
     function init() {
@@ -338,13 +237,11 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
     }
 
     function worldToLocal(p, R, q_) {
-        return q_.clone();
         let q = q_.clone();
-        return M.sub(q.applyMatrix3(R.clone().transpose()), p);
+        return M.sub(q, p).applyMatrix3(R.clone().transpose());
     }
 
     function localToWorld(p, R, q_) {
-        return q_.clone();
         let q = q_.clone();
         return M.add(p, q.applyMatrix3(R));
     }
@@ -359,7 +256,8 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
         let u2 = M.smul(dims[1], new THREE.Vector3(0, 1 , 0));
         let u3 = M.smul(dims[2], new THREE.Vector3(0, 0 , 1));
 
-        let p1 = new THREE.Vector3(p.x - dims[0]/2., p.y - dims[1]/2., p.z - dims[2]/2);
+        let p1 = new THREE.Vector3( - dims[0]/2., - dims[1]/2., - dims[2]/2);
+        console.log(p1);
         let p2 = M.add(p1, u2);
         let p3 = M.add(M.add(p1, u1), u2);
         let p4 = M.add(p1, u1);
@@ -376,15 +274,15 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
         let plane6 = [p6, p2, p3, p7];
         let planes = [plane1, plane2, plane3, plane4, plane5, plane6];
 
-        let i_draw = 0;
+        let i_draw = 5;
         let i = 0;
         let min_dist = 1000000;
         let p1_min;
         let p2_min;
         for (let plane of planes) {
-            if (i_draw ===i) {
+            if (true || i_draw ===i) {
                 for (let j = 0; j < 4; j++) {
-                    currPlane[j].position.set(plane[j].x, plane[j].y, plane[j].z);
+                   // currPlane[j].position.set(plane[j].x, plane[j].y, plane[j].z);
                 }
                 let res = M.shortestDistanceRectangleSegment_rOrtho(plane[0], plane[1], plane[2], plane[3], s1, s2);
                 if (res[2] < min_dist) {
@@ -401,7 +299,7 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
 
         p1Shortest.position.set(p1_min.x, p1_min.y, p1_min.z);
         p2Shortest.position.set(p2_min.x, p2_min.y, p2_min.z);
-        return p1;
+        return [p1_min, p2_min, min_dist];
 
 
     }

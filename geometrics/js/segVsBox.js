@@ -165,7 +165,7 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
 
         p1Shortest = addSphere(0xff0000);
         p2Shortest = addSphere(0xff0000);
-        //lineShortestDist = addLine(p1Shortest, p2Shortest, 0x000000);
+        lineShortestDist = addLine(p1Shortest, p2Shortest, 0x000000);
 
         lineSeg = addLine(positions[2], positions[3], 0xff00ff);
 
@@ -257,7 +257,6 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
         let u3 = M.smul(dims[2], new THREE.Vector3(0, 0 , 1));
 
         let p1 = new THREE.Vector3( - dims[0]/2., - dims[1]/2., - dims[2]/2);
-        console.log(p1);
         let p2 = M.add(p1, u2);
         let p3 = M.add(M.add(p1, u1), u2);
         let p4 = M.add(p1, u1);
@@ -297,8 +296,6 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
         p1_min = localToWorld(p, R, p1_min);
         p2_min = localToWorld(p, R, p2_min);
 
-        p1Shortest.position.set(p1_min.x, p1_min.y, p1_min.z);
-        p2Shortest.position.set(p2_min.x, p2_min.y, p2_min.z);
         return [p1_min, p2_min, min_dist];
 
 
@@ -323,8 +320,11 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
             rx.y, ry.y, rz.y,
             rx.z, ry.z, rz.z);
 
-        console.log(RL);
-        calcShortestDistance(box.position,RL, [data.width, data.height, data.depth], positions[2], positions[3]);
+       let res =  calcShortestDistance(box.position,RL, [data.width, data.height, data.depth], positions[2], positions[3]);
+
+        p1Shortest.position.set(res[0].x, res[0].y,res[0].z);
+        p2Shortest.position.set(res[1].x, res[1].y, res[1].z);
+        updateLine(lineShortestDist, res[0], res[1]);
     }
 
 

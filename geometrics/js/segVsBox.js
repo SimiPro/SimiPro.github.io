@@ -247,6 +247,7 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
     }
 
     function calcShortestDistance(p,R, dims, s1_, s2_) {
+        // 1. translate point into local coordinates
         let s1 = worldToLocal(p, R, s1_);
         let s2 = worldToLocal(p, R, s2_);
 
@@ -256,6 +257,7 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
         let u2 = M.smul(dims[1], new THREE.Vector3(0, 1 , 0));
         let u3 = M.smul(dims[2], new THREE.Vector3(0, 0 , 1));
 
+        // 2. create all the rectangle points in local coordinates
         let p1 = new THREE.Vector3( - dims[0]/2., - dims[1]/2., - dims[2]/2);
         let p2 = M.add(p1, u2);
         let p3 = M.add(M.add(p1, u1), u2);
@@ -265,6 +267,7 @@ import {shortestDistanceRectangleSegment, shortestDistanceRectangleSegment_rOrth
         let p7 = M.add(p3, u3);
         let p8 = M.add(p4, u3);
 
+        // 3. create all the planes
         let plane1 = [p1, p2, p3, p4];
         let plane2 = [p1, p4, p8, p5];
         let plane3 = [p5, p6, p7, p8];

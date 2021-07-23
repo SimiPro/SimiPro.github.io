@@ -186,7 +186,7 @@ import * as M from './math_helper.js'
     function projectToSegment(p, a, b) {
         let ab = M.sub(b, a);
         let t = 1;
-        if (M.dot(ab, ab) >= 1e-5) {
+        if (M.dot(ab, ab) >= 1e-5) { // check if parallel
             t = M.dot(M.sub(p, a), ab);
             t = t / M.dot(ab, ab);
             t = clamp01(t);

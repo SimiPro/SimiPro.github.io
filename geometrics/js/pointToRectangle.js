@@ -305,6 +305,7 @@ import * as M from './math_helper.js'
         const q = positions[3];
         const p = p0;
 
+
         let u1 = M.sub(p1, p0);
         let u2_ = M.sub(p2, p0);
 
@@ -326,9 +327,6 @@ import * as M from './math_helper.js'
         let diff = M.sub(q, p);
         let s = clamp(u1.dot(diff), 0, ext1);
         let t = clamp(u2.dot(diff), 0, ext2);
-
-
-
         return M.add(M.add(p, M.smul(s, u1)), M.smul(t, u2));
     }
 

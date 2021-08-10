@@ -65,6 +65,19 @@ class LineSegment {
         this.line.geometry.attributes.position.needsUpdate = true;
     }
 
+    getPi(s, lambda) {
+        let p1 = this.toWorld(s, this.p1);
+        let p2 = this.toWorld(s, this.p2);
+        return M.add(p1, M.smul(lambda, M.sub(p2, p1)));
+    }
+
+    dPi_dlamda(s, lambda) {
+        let p1 = this.toWorld(s, this.p1);
+        let p2 = this.toWorld(s, this.p2);
+        return M.sub(p2, p1);
+    }
+
+
 }
 
 (function() {
@@ -72,7 +85,7 @@ class LineSegment {
     let camera, scene, renderer;
     let height, width;
     const helperObjects = [];
-    let num_points = 2;
+    let num_points = 4;
     const positions = [];
 
     let rectangle;
@@ -197,13 +210,13 @@ class LineSegment {
         container.addEventListener( 'pointermove', onPointerMove );
 
         s1 = new LineSegment(100, scene);
-        //s2 = new LineSegment(200, scene);
+        s2 = new LineSegment(200, scene);
 
         const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xff00ff];
         positions.push(s1.p1);
         positions.push(s1.p2);
-       // positions.push(s2.p1);
-       // positions.push(s2.p2);
+        positions.push(s2.p1);
+        positions.push(s2.p2);
         for ( let i = 0; i < num_points; i ++ ) {
             addControlPoints( positions[ i ], colors[i] );
         }
@@ -222,9 +235,9 @@ class LineSegment {
       //  projS1 = addSphere(0xffffff);
     //    projS2 = addSphere(0xffffff);
 
-      //  p1Shortest = addSphere(0xff0000);
-      //  p2Shortest = addSphere(0xff0000);
-    //    lineShortestDist = addLine(p1Shortest, p2Shortest, 0x000000);
+        p1Shortest = addSphere(0xff0000);
+        p2Shortest = addSphere(0xff0000);
+        lineShortestDist = addLine(p1Shortest, p2Shortest, 0x000000);
 
     //    lineSeg = addLine(positions[2], positions[3], 0xff00ff);
 
@@ -346,6 +359,85 @@ class LineSegment {
 
     }
 
+    /*
+            let v1 = s1.u1;
+        let v2 = M.sub(positions[1], positions[0]);
+        let R_ = M.rotateAlignNaive(v1, v2);
+        let R = new THREE.Matrix4();
+        R.setFromMatrix3(R_);
+        let newQ = new THREE.Quaternion().setFromRotationMatrix(R);
+        newQ.normalize();
+        let newP = positions[0];
+
+        s1.setCOM(state, newP);
+        s1.setQuat(state, newQ);
+
+        positions[1] = s1.toWorld(state, s1.p2);
+
+        helperObjects[1].position.copy(positions[1]);
+
+     */
+    function updateLineSegStateFromUi(i) {
+        let s = (i === 0) ? s1 : s2;
+        let v1 =  s.u1;
+        let v2 = M.sub(positions[i*2 + 1], positions[i*2]);
+        let R_ = M.rotateAlignNaive(v1, v2);
+        let R = new THREE.Matrix4();
+        R.setFromMatrix3(R_);
+        let newQ = new THREE.Quaternion().setFromRotationMatrix(R);
+        newQ.normalize();
+        let newP = positions[i*2];
+
+        s.setCOM(state, newP);
+        s.setQuat(state, newQ);
+
+        positions[i*2 + 1] = s.toWorld(state, s.p2);
+
+        helperObjects[i*2 + 1].position.copy(positions[i*2 + 1]);
+    }
+
+    function f(lambda, s) {
+        let pi = s1.getPi(s, lambda.get([0]));
+        let pj = s2.getPi(s, lambda.get([1]));
+        return 0.5*M.sub(pi, pj).lengthSq();
+    }
+
+    function df_dlambda(lambda, s) {
+        let eps = 1e-6;
+        let n = lambda.size()[0];
+        let df_dl = math.zeros(n);
+        for (let i = 0; i < n; i++) {
+            let eps_v = math.zeros(n);
+            eps_v.set([i],eps);
+            let res = (f(math.add(lambda, eps_v), s) - f(math.subtract(lambda, eps_v), s)) / (2.*eps);
+            df_dl.set([i], res);
+        }
+        return df_dl;
+    }
+    function updateLine(line, pos1, pos2) {
+        line.geometry.attributes.position.setXYZ(0, pos1.x, pos1.y, pos1.z);
+        line.geometry.attributes.position.setXYZ(1, pos2.x, pos2.y, pos2.z);
+        line.geometry.attributes.position.needsUpdate = true;
+    }
+
+    function updateShortestDistance(s) {
+        let lambda = math.ones(2);
+        let alpha = 0.00001;
+        for (let i = 0; i  < 10; i++) {
+            let val = f(lambda, s);
+            console.log("curr dist: ", val);
+            let df_dl = df_dlambda(lambda, s);
+            lambda = math.subtract(lambda, math.multiply(alpha, df_dl));
+        }
+        console.log("optimal lambda: ", lambda);
+        for (let i = 0; i < lambda.size()[0]; i++) {
+            lambda.set([i], M.clamp01(lambda.get([i])));
+        }
+        updateLine(lineShortestDist, s1.getPi(s, lambda.get([0])), s2.getPi(s, lambda.get([1])));
+        return lambda;
+    }
+
+
     function updateStuff() {
       //  updateLine(lineSeg, positions[2], positions[3]);
 
@@ -358,23 +450,12 @@ class LineSegment {
 
         // since the movement of the segments on the gui is happening with dragging around the 2
         // positioning cubes we have to update the state accordingly to these positions
-        let v1 = s1.u1;
-        let v2 = M.sub(positions[1], positions[0]);
-        let R_ = M.rotateAlignNaive(v1, v2);
-        let R = new THREE.Matrix4();
-        R.setFromMatrix3(R_);
-        let newQ = new THREE.Quaternion().setFromRotationMatrix(R);
-        let newP = positions[0];
-
-        s1.setCOM(state, newP);
-        s1.setQuat(state, newQ);
-
-        positions[1] = s1.toWorld(state, s1.p2);
-
-        helperObjects[1].position.copy(positions[1]);
-
+        updateLineSegStateFromUi(0);
+        updateLineSegStateFromUi(1);
         s1.updateRendering(state);
-       // s2.updateRendering(state);
+        s2.updateRendering(state);
+
+        updateShortestDistance(state);
     }
 
 

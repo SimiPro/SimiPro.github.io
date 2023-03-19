@@ -1,0 +1,41 @@
+<!-- Simple web page showing a few pictures of the location of fabis birthday party -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Password-Protected Page</title>
+</head>
+<body>
+<h1>Enter the password to see the picture:</h1>
+<form onsubmit="return checkPassword()">
+  <label for="password">Password:</label>
+  <input type="password" id="password" name="password">
+  <input type="submit" value="Submit">
+</form>
+<div id="picture" style="display:none;">
+  <img src="img1.JPG">
+  <img src="img2.JPG">
+
+  <img src="img4-.jpg">
+
+</div>
+<script>
+  function checkPassword() {
+    var password = document.getElementById("password").value;
+    if (password == "party") {
+      document.getElementById("picture").style.display = "block";
+      return false;
+    } else {
+      alert("Incorrect password!");
+      return false;
+    }
+  }
+</script>
+</body>
+</html>
+
+<!-- </div> -->
+<!--  -->
+<!--  -->
+<!--  -->
+<!--  -->
+<!--  -
